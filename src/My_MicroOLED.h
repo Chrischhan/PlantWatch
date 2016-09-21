@@ -4,10 +4,12 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define DEBUG_MICROOLED(...) Serial.printf( __VA_ARGS__ )
-
 #ifndef DEBUG_MICROOLED
 #define DEBUG_MICROOLED(...)
+#endif
+
+#if (SSD1306_LCDHEIGHT != 48)
+#error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
 
 class My_MicroOLED : public Adafruit_SSD1306{
