@@ -172,6 +172,21 @@ void setup() {
   // Since the buffer is intialized with an Adafruit splashscreen
   // internally, this will display the splashscreen.
   display.display();
+  digitalWrite(BLUE_LED, HIGH);
+  delay(250);
+  digitalWrite(BLUE_LED, LOW);
+  digitalWrite(GREEN_LED, HIGH);
+  delay(250);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, HIGH);
+  delay(250);
+  digitalWrite(RED_LED, LOW);
+
+  digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage LOW
+  digitalWrite(BLUE_LED, LOW);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, LOW);
+
   delay(1000);// give some time to boot all up
 
   // Clear the buffer.
@@ -203,15 +218,7 @@ void loop() {
   //delay(500);                      // wait one second
   //digitalWrite(BUILTIN_LED, LOW);   // turn off LED with voltage LOW
   //delay(500);                      // wait one second
-  digitalWrite(BLUE_LED, HIGH);           // turn on LED with voltage HIGH
-  delay(500);
-  digitalWrite(BLUE_LED, LOW);            // turn off LED with voltage LOW
-  digitalWrite(GREEN_LED, HIGH);           // turn on LED with voltage HIGH
-  delay(500);
-  digitalWrite(GREEN_LED, LOW);            // turn off LED with voltage LOW
-  digitalWrite(RED_LED, HIGH);           // turn on LED with voltage HIGH
-  delay(500);                      // wait one second
-  digitalWrite(RED_LED, LOW);            // turn off LED with voltage LOW
+              // turn off LED with voltage LOW
 
 */
 
@@ -253,6 +260,16 @@ void loop() {
   //PLANT_PRINT("Sleep for ");
   //PLANT_PRINT(SLEEPSECONDS);
   //PLANT_PRINTLN(" seconds");
+
+  if(wifiMulti.run() == WL_CONNECTED)
+  {
+    PLANT_PRINT("WiFi connected, IP address: ");
+    PLANT_PRINTLN(WiFi.localIP());
+  }
+  else
+  {
+    PLANT_PRINTLN("WiFi NOT connected");
+  }
 
 
   #ifdef USE_DEEPSLEEP
