@@ -4,7 +4,9 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
+#include <FS.h>
 
+#include <ArduinoJson.h>
 // Uncomment to enable printing out nice debug messages.
 //#define DHT_DEBUG
 #include <DHT.h>
@@ -32,7 +34,80 @@ My_MicroOLED display(OLED_RESET);
 DHT dht(DHTPIN, DHTTYPE);
 ESP8266WiFiMulti wifiMulti;
 
-void setup() {
+static bool testVar = false;
+
+bool initializeWifiNetwork()
+{
+  if (!SPIFFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return false;
+  }
+
+  File configFile = SPIFFS.open("/wificonfig.json", "r");
+  if (!configFile)
+  {
+    Serial.println("Failed to open config file");
+    return false;
+  }
+
+  size_t size = configFile.size();
+  if (size > 1024)
+  {
+    Serial.println("Config file size is too large");
+    return false;
+  }
+
+  // Allocate a buffer to store contents of the file.
+  std::unique_ptr<char[]> buf(new char[size]);
+
+  // We don't use String here because ArduinoJson library requires the input
+  // buffer to be mutable. If you don't use ArduinoJson, you may as well
+  // use configFile.readString instead.
+  configFile.readBytes(buf.get(), size);
+
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonArray& json = jsonBuffer.parseArray(buf.get());
+
+  if (!json.success()) {
+    Serial.println("Failed to parse config file");
+    return false;
+  }
+
+  for (int count = 0; count < json.size() ; ++count)
+  {
+    JsonObject& wifi = json[count]["wifi"];
+    const char* ssid = wifi["ssid"];
+    const char* key = wifi["key"];
+
+    Serial.print("Add Wifinetwork to list. SSID: ");
+    Serial.println(ssid);
+    // uncomment only for real debug -> security ;-)
+    // Serial.print(", Key: ");
+    // Serial.println(key);
+
+    wifiMulti.addAP(ssid, key);
+  }
+
+  configFile.close();
+  SPIFFS.end();
+
+  Serial.println("Connecting Wifi...");
+  if(wifiMulti.run() == WL_CONNECTED)
+  {
+    Serial.print("WiFi connected, IP address: ");
+    Serial.println(WiFi.localIP());
+  }
+  else
+  {
+    Serial.println("WiFi not connected");
+    // TODO: Enter DeepSleep and wait for correct connection
+  }
+
+  return true;
+}
+
+bool initializeHardware()
+{
   pinMode(BUILTIN_LED, OUTPUT);  // initialize onboard LED as output
   pinMode(BLUE_LED, OUTPUT);  // set onboard LED as output
   pinMode(GREEN_LED, OUTPUT);  // set onboard LED as output
@@ -46,28 +121,42 @@ void setup() {
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(RED_LED, LOW);
 
-  Serial.begin(9600);
-  Serial.println("PlantSensor V3.0 Beta");
-
   Wire.begin(SDA_PIN, SCL_PIN);
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
 
   sensor.begin(); // reset sensor
   dht.begin();
+  delay(1000);// give some time to boot all up
+  return true;
+}
 
-  wifiMulti.addAP("ssid_from_AP_1", "your_password_for_AP_1");
-  //wifiMulti.addAP("ssid_from_AP_2", "your_password_for_AP_2");
-  //wifiMulti.addAP("ssid_from_AP_3", "your_password_for_AP_3");
+void setup() {
+
+  Serial.begin(115200);
+  Serial.println();
+  Serial.setDebugOutput(true);
+  Serial.println();
+
+  if (not initializeHardware()) {
+    Serial.println("Failed to initialize Hardware");
+  }
+  if (not initializeWifiNetwork()) {
+    Serial.println("Failed to initialize Wifi");
+  }
 
   // init done
-
+  Serial.println();
+  Serial.println("PlantSensor V3.0 Beta");
   Serial.print("I2C Soil Moisture Sensor Address: ");
   Serial.println(sensor.getAddress(),HEX);
   Serial.print("Sensor Firmware version: ");
   Serial.println(sensor.getVersion(),HEX);
   Serial.print("ESP ChipID: ");
   Serial.println(ESP.getChipId());
+  Serial.print("TestVar: ");
+  Serial.println(testVar);
+  testVar = not testVar;
   display.version();
   Serial.println();
 
@@ -99,12 +188,6 @@ void setup() {
     delay(20);
   }*/
 
-  Serial.println("Connecting Wifi...");
-  if(wifiMulti.run() == WL_CONNECTED)
-  {
-    Serial.print("WiFi connected, IP address: ");
-    Serial.println(WiFi.localIP());
-  }
 }
 
 void loop() {
@@ -159,10 +242,11 @@ void loop() {
   Serial.println(sensorValue);
 
 
-  Serial.print("Sleep for ");
-  Serial.print(SLEEPSECONDS);
-  Serial.println(" seconds");
+  //Serial.print("Sleep for ");
+  //Serial.print(SLEEPSECONDS);
+  //Serial.println(" seconds");
 
   // convert to microseconds
   ESP.deepSleep(SLEEPSECONDS * 1000000);
+  //delay(10000);
 }
