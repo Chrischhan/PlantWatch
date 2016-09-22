@@ -11,6 +11,9 @@
 //#define DHT_DEBUG
 #include <DHT.h>
 
+// uncommont to send ESP to DeepSleep
+//#define USE_DEEPSLEEP
+
 // Setup debug printing macros.
 #define PLANT_DEBUG
 #ifdef PLANT_DEBUG
@@ -251,7 +254,12 @@ void loop() {
   //PLANT_PRINT(SLEEPSECONDS);
   //PLANT_PRINTLN(" seconds");
 
-  // convert to microseconds
-  ESP.deepSleep(SLEEPSECONDS * 1000000);
-  //delay(10000);
+
+  #ifdef USE_DEEPSLEEP
+    // convert to microseconds
+    ESP.deepSleep(SLEEPSECONDS * 1000000);
+  #else
+    delay(SLEEPSECONDS * 1000);
+  #endif
+
 }
