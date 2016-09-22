@@ -27,6 +27,7 @@
 // Uncomment to enable printing out nice debug messages.
 #define DEBUG_MICROOLED(...) PLANT_PRINT( __VA_ARGS__ )
 #include "My_MicroOLED.h"
+#include "Images.h"
 
 #define OLED_RESET 0  // GPIO0
 
@@ -138,7 +139,6 @@ bool initializeHardware()
 
   sensor.begin(); // reset sensor
   dht.begin();
-  delay(1000);// give some time to boot all up
   return true;
 }
 
@@ -168,59 +168,116 @@ void setup() {
   display.version();
   PLANT_PRINTLN();
 
-  // Show image buffer on the display hardware.
-  // Since the buffer is intialized with an Adafruit splashscreen
-  // internally, this will display the splashscreen.
-  display.display();
-  digitalWrite(BLUE_LED, HIGH);
-  delay(250);
-  digitalWrite(BLUE_LED, LOW);
-  digitalWrite(GREEN_LED, HIGH);
-  delay(250);
-  digitalWrite(GREEN_LED, LOW);
+  // give some time to boot all up
   digitalWrite(RED_LED, HIGH);
-  delay(250);
-  digitalWrite(RED_LED, LOW);
+  for (int i = 0; i <= 100; i++)
+  {
+    display.drawProgressBar(0, 35, 62, 10, i);
+    display.display();
+    digitalWrite(BUILTIN_LED, i % 2 == 1 ? HIGH : LOW);
+    if (i == 33)
+    {
+      digitalWrite(GREEN_LED, HIGH);
+    }
+    if (i == 66)
+    {
+      digitalWrite(BLUE_LED, HIGH);
+    }
+    delay(20);
+  }
+
+  for (int i = 0; i <= 6; i++)
+  {
+    digitalWrite(BLUE_LED, i % 2 == 1 ? HIGH : LOW);
+    digitalWrite(GREEN_LED, i % 2 == 1 ? HIGH : LOW);
+    digitalWrite(RED_LED, i % 2 == 1 ? HIGH : LOW);
+    delay(100);
+  }
 
   digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage LOW
   digitalWrite(BLUE_LED, LOW);
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(RED_LED, LOW);
 
-  delay(1000);// give some time to boot all up
-
   // Clear the buffer.
   display.clearDisplay();
+  display.display();
 
-  // text display tests
-  /*display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-  display.print("Hello, wor");
-  display.setTextColor(BLACK, WHITE); // 'inverted' text
-  display.print(3.141592);
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.print("0x");
-  display.println(0xDEADBEEF, HEX);*/
-
-  /*for (int i = 0; i <= 100; i++)
+  /*for (int i = 0; i < 256; i++)
   {
-    display.drawProgressBar(0, 19, 63, 10, i);
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print(i);
+    display.drawChar(0, 10, (unsigned char) i, WHITE, BLACK, 1);
     display.display();
-    delay(20);
+    delay(500);
   }*/
 
 }
 
-void loop() {
-  /*digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage HIGH
-  //delay(500);                      // wait one second
-  //digitalWrite(BUILTIN_LED, LOW);   // turn off LED with voltage LOW
-  //delay(500);                      // wait one second
-              // turn off LED with voltage LOW
+void drawTemperature(const float& temperature)
+{
+  display.drawXBitmap(0, 0, ico_temp, ico_width, ico_height, WHITE);
+  String tempText = String(temperature, 1);
+  String text = tempText + " C";
 
-*/
+  char charBuf[10];
+  tempText.toCharArray(charBuf, 10);
+
+  int16_t newx, newy;
+  uint16_t wid, hig;
+
+  display.setCursor(6,0);
+  display.getTextBounds(charBuf, display.getCursorX(), display.getCursorY(), &newx, &newy, &wid, &hig);
+  display.drawChar(newx + wid + 1, newy, (unsigned char)247, WHITE, BLACK, 1);
+  display.print(text);
+}
+
+void drawAirHumidity(const float& airHumidity)
+{
+  display.drawXBitmap(0, 10, ico2_cloud, ico2_width, ico2_height, WHITE);
+  String tempText = String(airHumidity, 1);
+  String text = tempText + "%";
+  display.setCursor(ico2_width + 1, 10);
+  display.print(text);
+}
+
+void updateDisplay(const float& voltage, const float& temperature, const float& airHumidity)
+{
+  display.clearDisplay();
+  if (voltage >= 3.9)
+  {
+    display.drawXBitmap(52, 0, logo_bat_3_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else if (voltage >= 3.6)
+  {
+    display.drawXBitmap(52, 0, logo_bat_2_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else if (voltage >= 3.3)
+  {
+    display.drawXBitmap(52, 0, logo_bat_1_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else
+  {
+    display.drawXBitmap(52, 0, logo_bat_0_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+
+  // text display tests
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  drawTemperature(temperature);
+  drawAirHumidity(airHumidity);
+
+  display.drawXBitmap(0, 20, ico_drop, ico_width, ico_height, WHITE);
+
+
+  display.display();
+}
+
+
+void loop() {
+
+  // get all possible Values
 
   while (sensor.isBusy())
   {
@@ -271,6 +328,7 @@ void loop() {
     PLANT_PRINTLN("WiFi NOT connected");
   }
 
+  updateDisplay(voltage, temp, humidity);
 
   #ifdef USE_DEEPSLEEP
     // convert to microseconds
