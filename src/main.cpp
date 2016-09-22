@@ -11,8 +11,18 @@
 //#define DHT_DEBUG
 #include <DHT.h>
 
+// Setup debug printing macros.
+#define PLANT_DEBUG
+#ifdef PLANT_DEBUG
+  #define PLANT_PRINT(...) { Serial.print(__VA_ARGS__); }
+  #define PLANT_PRINTLN(...) { Serial.println(__VA_ARGS__); }
+#else
+  #define PLANT_PRINT(...) {}
+  #define PLANT_PRINTLN(...) {}
+#endif
+
 // Uncomment to enable printing out nice debug messages.
-#define DEBUG_MICROOLED(...) Serial.printf( __VA_ARGS__ )
+#define DEBUG_MICROOLED(...) PLANT_PRINT( __VA_ARGS__ )
 #include "My_MicroOLED.h"
 
 #define OLED_RESET 0  // GPIO0
@@ -34,26 +44,24 @@ My_MicroOLED display(OLED_RESET);
 DHT dht(DHTPIN, DHTTYPE);
 ESP8266WiFiMulti wifiMulti;
 
-static bool testVar = false;
-
 bool initializeWifiNetwork()
 {
   if (!SPIFFS.begin()) {
-    Serial.println("Failed to mount file system");
+    PLANT_PRINTLN("Failed to mount file system");
     return false;
   }
 
   File configFile = SPIFFS.open("/wificonfig.json", "r");
   if (!configFile)
   {
-    Serial.println("Failed to open config file");
+    PLANT_PRINTLN("Failed to open config file");
     return false;
   }
 
   size_t size = configFile.size();
   if (size > 1024)
   {
-    Serial.println("Config file size is too large");
+    PLANT_PRINTLN("Config file size is too large");
     return false;
   }
 
@@ -69,7 +77,7 @@ bool initializeWifiNetwork()
   JsonArray& json = jsonBuffer.parseArray(buf.get());
 
   if (!json.success()) {
-    Serial.println("Failed to parse config file");
+    PLANT_PRINTLN("Failed to parse config file");
     return false;
   }
 
@@ -79,11 +87,11 @@ bool initializeWifiNetwork()
     const char* ssid = wifi["ssid"];
     const char* key = wifi["key"];
 
-    Serial.print("Add Wifinetwork to list. SSID: ");
-    Serial.println(ssid);
+    PLANT_PRINT("Add Wifinetwork to list. SSID: ");
+    PLANT_PRINTLN(ssid);
     // uncomment only for real debug -> security ;-)
-    // Serial.print(", Key: ");
-    // Serial.println(key);
+    // PLANT_PRINT(", Key: ");
+    // PLANT_PRINTLN(key);
 
     wifiMulti.addAP(ssid, key);
   }
@@ -91,15 +99,15 @@ bool initializeWifiNetwork()
   configFile.close();
   SPIFFS.end();
 
-  Serial.println("Connecting Wifi...");
+  PLANT_PRINTLN("Connecting Wifi...");
   if(wifiMulti.run() == WL_CONNECTED)
   {
-    Serial.print("WiFi connected, IP address: ");
-    Serial.println(WiFi.localIP());
+    PLANT_PRINT("WiFi connected, IP address: ");
+    PLANT_PRINTLN(WiFi.localIP());
   }
   else
   {
-    Serial.println("WiFi not connected");
+    PLANT_PRINTLN("WiFi not connected");
     // TODO: Enter DeepSleep and wait for correct connection
   }
 
@@ -134,31 +142,28 @@ bool initializeHardware()
 void setup() {
 
   Serial.begin(115200);
-  Serial.println();
+  PLANT_PRINTLN();
   Serial.setDebugOutput(true);
-  Serial.println();
+  PLANT_PRINTLN();
 
   if (not initializeHardware()) {
-    Serial.println("Failed to initialize Hardware");
+    PLANT_PRINTLN("Failed to initialize Hardware");
   }
   if (not initializeWifiNetwork()) {
-    Serial.println("Failed to initialize Wifi");
+    PLANT_PRINTLN("Failed to initialize Wifi");
   }
 
   // init done
-  Serial.println();
-  Serial.println("PlantSensor V3.0 Beta");
-  Serial.print("I2C Soil Moisture Sensor Address: ");
-  Serial.println(sensor.getAddress(),HEX);
-  Serial.print("Sensor Firmware version: ");
-  Serial.println(sensor.getVersion(),HEX);
-  Serial.print("ESP ChipID: ");
-  Serial.println(ESP.getChipId());
-  Serial.print("TestVar: ");
-  Serial.println(testVar);
-  testVar = not testVar;
+  PLANT_PRINTLN();
+  PLANT_PRINTLN("PlantSensor V3.0 Beta");
+  PLANT_PRINT("I2C Soil Moisture Sensor Address: ");
+  PLANT_PRINTLN(sensor.getAddress(),HEX);
+  PLANT_PRINT("Sensor Firmware version: ");
+  PLANT_PRINTLN(sensor.getVersion(),HEX);
+  PLANT_PRINT("ESP ChipID: ");
+  PLANT_PRINTLN(ESP.getChipId());
   display.version();
-  Serial.println();
+  PLANT_PRINTLN();
 
   // Show image buffer on the display hardware.
   // Since the buffer is intialized with an Adafruit splashscreen
@@ -224,27 +229,27 @@ void loop() {
   // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.2V):
   float voltage = sensorValue * (4.2 / 1023.0);
 
-  Serial.print("Soil Moisture Capacitance: ");
-  Serial.print(soilMoisture); //read capacitance register
-  Serial.print(", Temperature: ");
-  Serial.print(tempChirp); //temperature register
-  Serial.print(", Light: ");
-  Serial.print(light); //request light measurement, wait and read light register*/
-  Serial.print(", DHT Temperature: ");
-  Serial.print(temp);
-  Serial.print(", DHT Humidity: ");
-  Serial.print(humidity);
-  Serial.print(", DHT HeatIndex: ");
-  Serial.print(dht.computeHeatIndex(temp, humidity, false));
-  Serial.print(", Voltage: ");
-  Serial.print(voltage);
-  Serial.print(", SensorValue: ");
-  Serial.println(sensorValue);
+  PLANT_PRINT("Soil Moisture Capacitance: ");
+  PLANT_PRINT(soilMoisture); //read capacitance register
+  PLANT_PRINT(", Temperature: ");
+  PLANT_PRINT(tempChirp); //temperature register
+  PLANT_PRINT(", Light: ");
+  PLANT_PRINT(light); //request light measurement, wait and read light register*/
+  PLANT_PRINT(", DHT Temperature: ");
+  PLANT_PRINT(temp);
+  PLANT_PRINT(", DHT Humidity: ");
+  PLANT_PRINT(humidity);
+  PLANT_PRINT(", DHT HeatIndex: ");
+  PLANT_PRINT(dht.computeHeatIndex(temp, humidity, false));
+  PLANT_PRINT(", Voltage: ");
+  PLANT_PRINT(voltage);
+  PLANT_PRINT(", SensorValue: ");
+  PLANT_PRINTLN(sensorValue);
 
 
-  //Serial.print("Sleep for ");
-  //Serial.print(SLEEPSECONDS);
-  //Serial.println(" seconds");
+  //PLANT_PRINT("Sleep for ");
+  //PLANT_PRINT(SLEEPSECONDS);
+  //PLANT_PRINTLN(" seconds");
 
   // convert to microseconds
   ESP.deepSleep(SLEEPSECONDS * 1000000);
