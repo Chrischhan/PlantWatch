@@ -2,6 +2,8 @@
 #include <Wire.h>
 #include <I2CSoilMoistureSensor.h>
 
+#include <PubSubClient.h>
+
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <FS.h>
@@ -47,6 +49,9 @@ I2CSoilMoistureSensor sensor;
 My_MicroOLED display(OLED_RESET);
 DHT dht(DHTPIN, DHTTYPE);
 ESP8266WiFiMulti wifiMulti;
+
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
 
 bool initializeWifiNetwork()
 {
@@ -142,6 +147,45 @@ bool initializeHardware()
   return true;
 }
 
+void callback(char* topic, byte* payload, unsigned int length) {
+  PLANT_PRINT("Message arrived [");
+  PLANT_PRINT(topic);
+  PLANT_PRINT("] ");
+  for (int i = 0; i < length; i++) {
+    PLANT_PRINT((char)payload[i]);
+  }
+  PLANT_PRINTLN();
+
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!mqtt.connected())
+  {
+    PLANT_PRINT("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(ESP.getChipId(), HEX);;
+    // Attempt to connect
+    if (mqtt.connect(clientId.c_str()))
+    {
+      PLANT_PRINTLN("connected");
+      // Once connected, publish an announcement...
+      mqtt.publish("SYSTEM/PlantWatch/Devices", clientId.c_str());
+      // ... and resubscribe
+      mqtt.subscribe("SYSTEM/PlantWatch/Version");
+    }
+    else
+    {
+      PLANT_PRINT("failed, rc=");
+      PLANT_PRINT(mqtt.state());
+      PLANT_PRINTLN(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
 void setup() {
 
   Serial.begin(115200);
@@ -156,15 +200,19 @@ void setup() {
     PLANT_PRINTLN("Failed to initialize Wifi");
   }
 
+  // initialize MQTT
+  mqtt.setServer("192.168.42.108", 1883);
+  mqtt.setCallback(callback);
+
   // init done
   PLANT_PRINTLN();
   PLANT_PRINTLN("PlantSensor V3.0 Beta");
   PLANT_PRINT("I2C Soil Moisture Sensor Address: ");
-  PLANT_PRINTLN(sensor.getAddress(),HEX);
+  PLANT_PRINTLN(sensor.getAddress(), HEX);
   PLANT_PRINT("Sensor Firmware version: ");
-  PLANT_PRINTLN(sensor.getVersion(),HEX);
+  PLANT_PRINTLN(sensor.getVersion(), HEX);
   PLANT_PRINT("ESP ChipID: ");
-  PLANT_PRINTLN(ESP.getChipId());
+  PLANT_PRINTLN(ESP.getChipId(), HEX);
   display.version();
   PLANT_PRINTLN();
 
@@ -327,6 +375,29 @@ void loop() {
   {
     PLANT_PRINTLN("WiFi NOT connected");
   }
+
+  if (!mqtt.connected())
+  {
+    reconnect();
+  }
+  mqtt.loop();
+
+  // publish Values to defined Topics
+  String topic = "PlantWatch/";
+  topic += String(ESP.getChipId(), HEX);
+  topic += "/";
+  PLANT_PRINTLN("Publish messages");
+
+  mqtt.publish(String(topic + "SoilMoisture").c_str(), String(soilMoisture, 2).c_str());
+  mqtt.publish(String(topic + "Temperature1").c_str(), String(tempChirp, 2).c_str());
+  mqtt.publish(String(topic + "Temperature2").c_str(), String(temp, 2).c_str());
+  mqtt.publish(String(topic + "Light").c_str(), String(light, 2).c_str());
+  mqtt.publish(String(topic + "Humidity").c_str(), String(humidity, 2).c_str());
+  mqtt.publish(String(topic + "HeatIndex").c_str(), String(dht.computeHeatIndex(temp, humidity, false), 2).c_str());
+  mqtt.publish(String(topic + "Voltage").c_str(), String(voltage, 2).c_str());
+  mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue, 2).c_str());
+
+  mqtt.publish("test/topic", "Hello world Loop");
 
   updateDisplay(voltage, temp, humidity);
 
