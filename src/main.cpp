@@ -1,53 +1,30 @@
 #include <Arduino.h>
 #include <Wire.h>
+
+#include "config.h"
 #include <I2CSoilMoistureSensor.h>
 
 #include <PubSubClient.h>
 
-#include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <FS.h>
 
 #include <ArduinoJson.h>
-// Uncomment to enable printing out nice debug messages.
-//#define DHT_DEBUG
+
 #include <DHT.h>
 
-// uncommont to send ESP to DeepSleep
-//#define USE_DEEPSLEEP
+#ifdef OLED
+  #include "My_MicroOLED.h"
+  #include "Images.h"
 
-// Setup debug printing macros.
-#define PLANT_DEBUG
-#ifdef PLANT_DEBUG
-  #define PLANT_PRINT(...) { Serial.print(__VA_ARGS__); }
-  #define PLANT_PRINTLN(...) { Serial.println(__VA_ARGS__); }
-#else
-  #define PLANT_PRINT(...) {}
-  #define PLANT_PRINTLN(...) {}
+  #define OLED_RESET 0  // GPIO0
 #endif
 
-// Uncomment to enable printing out nice debug messages.
-#define DEBUG_MICROOLED(...) PLANT_PRINT( __VA_ARGS__ )
-#include "My_MicroOLED.h"
-#include "Images.h"
-
-#define OLED_RESET 0  // GPIO0
-
-#define DHTPIN D4     // what pin DHT connected to
-#define DHTTYPE DHT22   // DHT 22  (AM2302)
-
-#define BLUE_LED D6
-#define GREEN_LED D7
-#define RED_LED D8
-
-#define SCL_PIN D1
-#define SDA_PIN D2
-
-#define SLEEPSECONDS 10
-
 I2CSoilMoistureSensor sensor;
-My_MicroOLED display(OLED_RESET);
-DHT dht(DHTPIN, DHTTYPE);
+#ifdef OLED
+  My_MicroOLED display(OLED_RESET);
+#endif
+DHT dht(DHTPIN, DHT22); // DHT 22  (AM2302)
 ESP8266WiFiMulti wifiMulti;
 
 WiFiClient espClient;
