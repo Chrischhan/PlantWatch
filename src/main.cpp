@@ -181,8 +181,6 @@ void setup() {
 
   Serial.begin(115200);
   PLANT_PRINTLN();
-  Serial.setDebugOutput(true);
-  PLANT_PRINTLN();
 
   if (not initializeHardware()) {
     PLANT_PRINTLN("Failed to initialize Hardware");
@@ -398,9 +396,10 @@ void loop() {
   mqtt.publish(String(topic + "Humidity").c_str(), String(humidity, 2).c_str());
   mqtt.publish(String(topic + "HeatIndex").c_str(), String(dht.computeHeatIndex(temp, humidity, false), 2).c_str());
   mqtt.publish(String(topic + "Voltage").c_str(), String(voltage, 2).c_str());
-  mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue, 2).c_str());
+  mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue).c_str());
 
-  mqtt.publish("test/topic", "Hello world Loop");
+  PLANT_PRINTLN(" messages published");
+
   #ifdef OLED
     updateDisplay(voltage, temp, humidity);
   #endif
