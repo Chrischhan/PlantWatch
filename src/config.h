@@ -1,9 +1,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// Define Software and SPIFFS Versions
+#define PLANT_WATCH_VERSION 1
+#define PLANT_WATCH_SPIFFS_VERSION 1
+
 // enable and disable features in code
-#define OLED
-#define LEDS
+//#define OLED
+//#define LEDS
 
 // Setup debug printing macros.
 // comment to disable Serial Logging

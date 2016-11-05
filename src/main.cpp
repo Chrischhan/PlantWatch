@@ -13,17 +13,17 @@
 
 #include <DHT.h>
 
+I2CSoilMoistureSensor sensor;
+
 #ifdef OLED
   #include "My_MicroOLED.h"
   #include "Images.h"
 
   #define OLED_RESET 0  // GPIO0
-#endif
 
-I2CSoilMoistureSensor sensor;
-#ifdef OLED
   My_MicroOLED display(OLED_RESET);
 #endif
+
 DHT dht(DHTPIN, DHT22); // DHT 22  (AM2302)
 ESP8266WiFiMulti wifiMulti;
 
@@ -94,7 +94,12 @@ bool initializeWifiNetwork()
   else
   {
     PLANT_PRINTLN("WiFi not connected");
-    // TODO: Enter DeepSleep and wait for correct connection
+    #ifdef USE_DEEPSLEEP
+      // convert to microseconds
+      ESP.deepSleep(SLEEPSECONDS * 1000000);
+    #else
+      delay(SLEEPSECONDS * 1000);
+    #endif
   }
 
   return true;
@@ -103,28 +108,35 @@ bool initializeWifiNetwork()
 bool initializeHardware()
 {
   pinMode(BUILTIN_LED, OUTPUT);  // initialize onboard LED as output
-  pinMode(BLUE_LED, OUTPUT);  // set onboard LED as output
-  pinMode(GREEN_LED, OUTPUT);  // set onboard LED as output
-  pinMode(RED_LED, OUTPUT);  // set onboard LED as output
-
+  #ifdef LEDS
+    pinMode(BLUE_LED, OUTPUT);  // set onboard LED as output
+    pinMode(GREEN_LED, OUTPUT);  // set onboard LED as output
+    pinMode(RED_LED, OUTPUT);  // set onboard LED as output
+  #endif
   // Connect D0 to RST to wake up
   pinMode(D0, WAKEUP_PULLUP);
 
   digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage LOW
-  digitalWrite(BLUE_LED, LOW);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
+  #ifdef LEDS
+    digitalWrite(BLUE_LED, LOW);
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(RED_LED, LOW);
+  #endif
 
   Wire.begin(SDA_PIN, SCL_PIN);
-  // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
+
+  #ifdef OLED
+    // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
+    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
+  #endif
 
   sensor.begin(); // reset sensor
   dht.begin();
   return true;
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length)
+{
   PLANT_PRINT("Message arrived [");
   PLANT_PRINT(topic);
   PLANT_PRINT("] ");
@@ -135,7 +147,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 }
 
-void reconnect() {
+void reconnect()
+{
   // Loop until we're reconnected
   while (!mqtt.connected())
   {
@@ -151,6 +164,7 @@ void reconnect() {
       mqtt.publish("SYSTEM/PlantWatch/Devices", clientId.c_str());
       // ... and resubscribe
       mqtt.subscribe("SYSTEM/PlantWatch/Version");
+      mqtt.subscribe("SYSTEM/PlantWatch/FSVersion");
     }
     else
     {
@@ -190,56 +204,68 @@ void setup() {
   PLANT_PRINTLN(sensor.getVersion(), HEX);
   PLANT_PRINT("ESP ChipID: ");
   PLANT_PRINTLN(ESP.getChipId(), HEX);
-  display.version();
+  #ifdef OLED
+    display.version();
+  #endif
   PLANT_PRINTLN();
 
-  // give some time to boot all up
-  digitalWrite(RED_LED, HIGH);
+  #ifdef LEDS
+    // give some time to boot all up
+    digitalWrite(RED_LED, HIGH);
+  #endif
   for (int i = 0; i <= 100; i++)
   {
-    display.drawProgressBar(0, 35, 62, 10, i);
-    display.display();
+    #ifdef OLED
+      display.drawProgressBar(0, 35, 62, 10, i);
+      display.display();
+    #endif
     digitalWrite(BUILTIN_LED, i % 2 == 1 ? HIGH : LOW);
-    if (i == 33)
-    {
-      digitalWrite(GREEN_LED, HIGH);
-    }
-    if (i == 66)
-    {
-      digitalWrite(BLUE_LED, HIGH);
-    }
+    #ifdef LEDS
+      if (i == 33)
+      {
+        digitalWrite(GREEN_LED, HIGH);
+      }
+      if (i == 66)
+      {
+        digitalWrite(BLUE_LED, HIGH);
+      }
+    #endif
     delay(20);
   }
 
-  for (int i = 0; i <= 6; i++)
-  {
-    digitalWrite(BLUE_LED, i % 2 == 1 ? HIGH : LOW);
-    digitalWrite(GREEN_LED, i % 2 == 1 ? HIGH : LOW);
-    digitalWrite(RED_LED, i % 2 == 1 ? HIGH : LOW);
-    delay(100);
-  }
+  #ifdef LEDS
+    for (int i = 0; i <= 6; i++)
+    {
+      digitalWrite(BLUE_LED, i % 2 == 1 ? HIGH : LOW);
+      digitalWrite(GREEN_LED, i % 2 == 1 ? HIGH : LOW);
+      digitalWrite(RED_LED, i % 2 == 1 ? HIGH : LOW);
+      delay(100);
+    }
 
-  digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage LOW
-  digitalWrite(BLUE_LED, LOW);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
+    digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage LOW
+    digitalWrite(BLUE_LED, LOW);
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(RED_LED, LOW);
+  #endif
 
-  // Clear the buffer.
-  display.clearDisplay();
-  display.display();
-
-  /*for (int i = 0; i < 256; i++)
-  {
+  #ifdef OLED
+    // Clear the buffer.
     display.clearDisplay();
-    display.setCursor(0, 0);
-    display.print(i);
-    display.drawChar(0, 10, (unsigned char) i, WHITE, BLACK, 1);
     display.display();
-    delay(500);
-  }*/
 
+    /*for (int i = 0; i < 256; i++)
+    {
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.print(i);
+      display.drawChar(0, 10, (unsigned char) i, WHITE, BLACK, 1);
+      display.display();
+      delay(500);
+    }*/
+    #endif
 }
 
+#ifdef OLED
 void drawTemperature(const float& temperature)
 {
   display.drawXBitmap(0, 0, ico_temp, ico_width, ico_height, WHITE);
@@ -298,7 +324,7 @@ void updateDisplay(const float& voltage, const float& temperature, const float& 
 
   display.display();
 }
-
+#endif
 
 void loop() {
 
@@ -375,8 +401,9 @@ void loop() {
   mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue, 2).c_str());
 
   mqtt.publish("test/topic", "Hello world Loop");
-
-  updateDisplay(voltage, temp, humidity);
+  #ifdef OLED
+    updateDisplay(voltage, temp, humidity);
+  #endif
 
   #ifdef USE_DEEPSLEEP
     // convert to microseconds
