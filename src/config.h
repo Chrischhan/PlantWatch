@@ -8,6 +8,7 @@
 // enable and disable features in code
 //#define OLED
 //#define LEDS
+//#define SELFUPDATE
 
 // Setup debug printing macros.
 // comment to disable Serial Logging

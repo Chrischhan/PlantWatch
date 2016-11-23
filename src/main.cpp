@@ -2,11 +2,15 @@
 #include <Wire.h>
 
 #include "config.h"
+
 #include <I2CSoilMoistureSensor.h>
 
 #include <PubSubClient.h>
 
 #include <ESP8266WiFiMulti.h>
+#ifdef SELFUPDATE
+  #include <ESP8266httpUpdate.h>
+#endif
 #include <FS.h>
 
 #include <ArduinoJson.h>
@@ -139,12 +143,41 @@ void callback(char* topic, byte* payload, unsigned int length)
 {
   PLANT_PRINT("Message arrived [");
   PLANT_PRINT(topic);
-  PLANT_PRINT("] ");
+  PLANT_PRINT("] (length: ");
+  PLANT_PRINT(length)
+  PLANT_PRINT(") ")
+  String readyPayload("");
   for (int i = 0; i < length; i++) {
     PLANT_PRINT((char)payload[i]);
+    readyPayload += (char)payload[i];
   }
   PLANT_PRINTLN();
 
+#ifdef SELFUPDATE
+  if (0 == strcmp(topic, "SYSTEM/PlantWatch/Version"))
+  {
+    if (readyPayload != String(PLANT_WATCH_VERSION))
+    {
+      PLANT_PRINTLN("try to update Version")
+      t_httpUpdate_return ret = ESPhttpUpdate.update(
+        "192.168.42.108", 80, "/espupdate.php", String(PLANT_WATCH_VERSION));
+      switch(ret)
+      {
+          case HTTP_UPDATE_FAILED:
+              PLANT_PRINTLN("[update] Update failed.");
+              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
+              break;
+          case HTTP_UPDATE_NO_UPDATES:
+              PLANT_PRINTLN("[update] Update no Update.");
+              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
+              break;
+          case HTTP_UPDATE_OK:
+              PLANT_PRINTLN("[update] Update ok."); // may not called we reboot the ESP
+              break;
+      }
+    }
+  }
+#endif
 }
 
 void reconnect()
@@ -177,7 +210,8 @@ void reconnect()
   }
 }
 
-void setup() {
+void setup()
+{
 
   Serial.begin(115200);
   PLANT_PRINTLN();
@@ -202,6 +236,8 @@ void setup() {
   PLANT_PRINTLN(sensor.getVersion(), HEX);
   PLANT_PRINT("ESP ChipID: ");
   PLANT_PRINTLN(ESP.getChipId(), HEX);
+  PLANT_PRINT("Sketch MD5: ");
+  PLANT_PRINTLN(String(ESP.getSketchMD5()));
   #ifdef OLED
     display.version();
   #endif
@@ -362,11 +398,6 @@ void loop() {
   PLANT_PRINT(", SensorValue: ");
   PLANT_PRINTLN(sensorValue);
 
-
-  //PLANT_PRINT("Sleep for ");
-  //PLANT_PRINT(SLEEPSECONDS);
-  //PLANT_PRINTLN(" seconds");
-
   if(wifiMulti.run() == WL_CONNECTED)
   {
     PLANT_PRINT("WiFi connected, IP address: ");
@@ -387,7 +418,7 @@ void loop() {
   String topic = "PlantWatch/";
   topic += String(ESP.getChipId(), HEX);
   topic += "/";
-  PLANT_PRINTLN("Publish messages");
+  PLANT_PRINTLN("publish messages");
 
   mqtt.publish(String(topic + "SoilMoisture").c_str(), String(soilMoisture, 2).c_str());
   mqtt.publish(String(topic + "Temperature1").c_str(), String(tempChirp, 2).c_str());
@@ -398,7 +429,7 @@ void loop() {
   mqtt.publish(String(topic + "Voltage").c_str(), String(voltage, 2).c_str());
   mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue).c_str());
 
-  PLANT_PRINTLN(" messages published");
+  PLANT_PRINTLN("messages published");
 
   #ifdef OLED
     updateDisplay(voltage, temp, humidity);
