@@ -4,18 +4,25 @@
 #include "config.h"
 
 #include <I2CSoilMoistureSensor.h>
+#include <ESP8266WiFiMulti.h>
+#include <FS.h>
+#include <ArduinoJson.h>
 
 #include <PubSubClient.h>
 
-#include <ESP8266WiFiMulti.h>
 #ifdef SELFUPDATE
   #include <ESP8266httpUpdate.h>
 #endif
-#include <FS.h>
 
-#include <ArduinoJson.h>
+#ifdef USE_DHT22
+  #include <DHT.h>
+  DHT dht(DHTPIN, DHT22); // DHT 22  (AM2302)
+#endif
 
-#include <DHT.h>
+#ifdef USE_SHT30
+  #include <WEMOS_SHT3X.h>
+  SHT3X sht30(SHT_ADDRESS);
+#endif
 
 I2CSoilMoistureSensor sensor;
 
@@ -28,11 +35,56 @@ I2CSoilMoistureSensor sensor;
   My_MicroOLED display(OLED_RESET);
 #endif
 
-DHT dht(DHTPIN, DHT22); // DHT 22  (AM2302)
 ESP8266WiFiMulti wifiMulti;
 
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
+
+String mqtt_server;
+int mqtt_port;
+
+String updateServer = "";
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  PLANT_PRINT("Message arrived [");
+  PLANT_PRINT(topic);
+  PLANT_PRINT("] (length: ");
+  PLANT_PRINT(length)
+  PLANT_PRINT(") ")
+  String readyPayload("");
+  for (int i = 0; i < length; i++) {
+    PLANT_PRINT((char)payload[i]);
+    readyPayload += (char)payload[i];
+  }
+  PLANT_PRINTLN();
+
+#ifdef SELFUPDATE
+  if (0 == strcmp(topic, "SYSTEM/PlantWatch/Version"))
+  {
+    if (readyPayload != String(PLANT_WATCH_VERSION))
+    {
+      PLANT_PRINTLN("try to update Version")
+      t_httpUpdate_return ret = ESPhttpUpdate.update(
+        updateServer, 80, "/espupdate.php", String(PLANT_WATCH_VERSION));
+      switch(ret)
+      {
+          case HTTP_UPDATE_FAILED:
+              PLANT_PRINTLN("[update] Update failed.");
+              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
+              break;
+          case HTTP_UPDATE_NO_UPDATES:
+              PLANT_PRINTLN("[update] Update no Update.");
+              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
+              break;
+          case HTTP_UPDATE_OK:
+              PLANT_PRINTLN("[update] Update ok."); // may not called we reboot the ESP
+              break;
+      }
+    }
+  }
+#endif
+}
 
 bool initializeWifiNetwork()
 {
@@ -41,7 +93,7 @@ bool initializeWifiNetwork()
     return false;
   }
 
-  File configFile = SPIFFS.open("/wificonfig.json", "r");
+  File configFile = SPIFFS.open("/config.json", "r");
   if (!configFile)
   {
     PLANT_PRINTLN("Failed to open config file");
@@ -64,18 +116,15 @@ bool initializeWifiNetwork()
   configFile.readBytes(buf.get(), size);
 
   StaticJsonBuffer<200> jsonBuffer;
-  JsonArray& json = jsonBuffer.parseArray(buf.get());
+  JsonObject& root = jsonBuffer.parseObject(buf.get());
+  JsonArray& wifi = root["wifi"];
+  const char* updateServer = root["updateServer"];
 
-  if (!json.success()) {
-    PLANT_PRINTLN("Failed to parse config file");
-    return false;
-  }
-
-  for (int count = 0; count < json.size() ; ++count)
+  for (int count = 0; count < wifi.size() ; ++count)
   {
-    JsonObject& wifi = json[count]["wifi"];
-    const char* ssid = wifi["ssid"];
-    const char* key = wifi["key"];
+    JsonObject& wifiObject = wifi[count];
+    const char* ssid = wifiObject["ssid"];
+    const char* key = wifiObject["key"];
 
     PLANT_PRINT("Add Wifinetwork to list. SSID: ");
     PLANT_PRINTLN(ssid);
@@ -85,26 +134,15 @@ bool initializeWifiNetwork()
 
     wifiMulti.addAP(ssid, key);
   }
+  const char* server = root["mqtt"][0];
+  mqtt_server = String(server);
+  mqtt_port = root["mqtt"][1];
 
   configFile.close();
   SPIFFS.end();
 
-  PLANT_PRINTLN("Connecting Wifi...");
-  if(wifiMulti.run() == WL_CONNECTED)
-  {
-    PLANT_PRINT("WiFi connected, IP address: ");
-    PLANT_PRINTLN(WiFi.localIP());
-  }
-  else
-  {
-    PLANT_PRINTLN("WiFi not connected");
-    #ifdef USE_DEEPSLEEP
-      // convert to microseconds
-      ESP.deepSleep(SLEEPSECONDS * 1000000);
-    #else
-      delay(SLEEPSECONDS * 1000);
-    #endif
-  }
+  PLANT_PRINTLN("PreConnecting Wifi...");
+  wifiMulti.run();
 
   return true;
 }
@@ -135,60 +173,31 @@ bool initializeHardware()
   #endif
 
   sensor.begin(); // reset sensor
-  dht.begin();
+  #ifdef USE_DHT22
+    dht.begin();
+  #endif
   return true;
-}
-
-void callback(char* topic, byte* payload, unsigned int length)
-{
-  PLANT_PRINT("Message arrived [");
-  PLANT_PRINT(topic);
-  PLANT_PRINT("] (length: ");
-  PLANT_PRINT(length)
-  PLANT_PRINT(") ")
-  String readyPayload("");
-  for (int i = 0; i < length; i++) {
-    PLANT_PRINT((char)payload[i]);
-    readyPayload += (char)payload[i];
-  }
-  PLANT_PRINTLN();
-
-#ifdef SELFUPDATE
-  if (0 == strcmp(topic, "SYSTEM/PlantWatch/Version"))
-  {
-    if (readyPayload != String(PLANT_WATCH_VERSION))
-    {
-      PLANT_PRINTLN("try to update Version")
-      t_httpUpdate_return ret = ESPhttpUpdate.update(
-        "192.168.42.108", 80, "/espupdate.php", String(PLANT_WATCH_VERSION));
-      switch(ret)
-      {
-          case HTTP_UPDATE_FAILED:
-              PLANT_PRINTLN("[update] Update failed.");
-              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
-              break;
-          case HTTP_UPDATE_NO_UPDATES:
-              PLANT_PRINTLN("[update] Update no Update.");
-              PLANT_PRINTLN(ESPhttpUpdate.getLastErrorString())
-              break;
-          case HTTP_UPDATE_OK:
-              PLANT_PRINTLN("[update] Update ok."); // may not called we reboot the ESP
-              break;
-      }
-    }
-  }
-#endif
 }
 
 void reconnect()
 {
+  int timeout_counter = 10;
   // Loop until we're reconnected
   while (!mqtt.connected())
   {
-    PLANT_PRINT("Attempting MQTT connection...");
+    PLANT_PRINTLN("Attempting MQTT connection...");
     // Create a random client ID
     String clientId = "ESP8266Client-";
-    clientId += String(ESP.getChipId(), HEX);;
+    clientId += String(ESP.getChipId(), HEX);
+
+    // initialize MQTT
+    PLANT_PRINT("MQTT Server: ");
+    PLANT_PRINT(mqtt_server);
+    PLANT_PRINT(" MQTT Port: ");
+    PLANT_PRINTLN(mqtt_port);
+    mqtt.setServer(mqtt_server.c_str(), mqtt_port);
+    mqtt.setCallback(callback);
+
     // Attempt to connect
     if (mqtt.connect(clientId.c_str()))
     {
@@ -206,6 +215,17 @@ void reconnect()
       PLANT_PRINTLN(" try again in 5 seconds");
       // Wait 5 seconds before retrying
       delay(5000);
+
+      if (timeout_counter == 0)
+      {
+        #ifdef USE_DEEPSLEEP
+          // convert to microseconds
+          ESP.deepSleep(SLEEPSECONDS * 1000000);
+        #else
+          delay(SLEEPSECONDS * 1000);
+        #endif
+      }
+      timeout_counter--;
     }
   }
 }
@@ -216,16 +236,14 @@ void setup()
   Serial.begin(115200);
   PLANT_PRINTLN();
 
+  WiFi.mode(WIFI_STA);
+
   if (not initializeHardware()) {
     PLANT_PRINTLN("Failed to initialize Hardware");
   }
   if (not initializeWifiNetwork()) {
     PLANT_PRINTLN("Failed to initialize Wifi");
   }
-
-  // initialize MQTT
-  mqtt.setServer("192.168.42.108", 1883);
-  mqtt.setCallback(callback);
 
   // init done
   PLANT_PRINTLN();
@@ -236,6 +254,7 @@ void setup()
   PLANT_PRINTLN(sensor.getVersion(), HEX);
   PLANT_PRINT("ESP ChipID: ");
   PLANT_PRINTLN(ESP.getChipId(), HEX);
+  PLANT_PRINTLN("Check ID in: https://www.wemos.cc/verify_products");
   PLANT_PRINT("Sketch MD5: ");
   PLANT_PRINTLN(String(ESP.getSketchMD5()));
   #ifdef OLED
@@ -299,66 +318,45 @@ void setup()
     #endif
 }
 
-#ifdef OLED
-void drawTemperature(const float& temperature)
-{
-  display.drawXBitmap(0, 0, ico_temp, ico_width, ico_height, WHITE);
-  String tempText = String(temperature, 1);
-  String text = tempText + " C";
-
-  char charBuf[10];
-  tempText.toCharArray(charBuf, 10);
-
-  int16_t newx, newy;
-  uint16_t wid, hig;
-
-  display.setCursor(6,0);
-  display.getTextBounds(charBuf, display.getCursorX(), display.getCursorY(), &newx, &newy, &wid, &hig);
-  display.drawChar(newx + wid + 1, newy, (unsigned char)247, WHITE, BLACK, 1);
-  display.print(text);
+float convertCtoF(float c) {
+  return c * 1.8 + 32;
 }
 
-void drawAirHumidity(const float& airHumidity)
-{
-  display.drawXBitmap(0, 10, ico2_cloud, ico2_width, ico2_height, WHITE);
-  String tempText = String(airHumidity, 1);
-  String text = tempText + "%";
-  display.setCursor(ico2_width + 1, 10);
-  display.print(text);
+float convertFtoC(float f) {
+  return (f - 32) * 0.55555;
 }
 
-void updateDisplay(const float& voltage, const float& temperature, const float& airHumidity)
-{
-  display.clearDisplay();
-  if (voltage >= 3.9)
-  {
-    display.drawXBitmap(52, 0, logo_bat_3_3, logo_bat_width, logo_bat_height, WHITE);
-  }
-  else if (voltage >= 3.6)
-  {
-    display.drawXBitmap(52, 0, logo_bat_2_3, logo_bat_width, logo_bat_height, WHITE);
-  }
-  else if (voltage >= 3.3)
-  {
-    display.drawXBitmap(52, 0, logo_bat_1_3, logo_bat_width, logo_bat_height, WHITE);
-  }
-  else
-  {
-    display.drawXBitmap(52, 0, logo_bat_0_3, logo_bat_width, logo_bat_height, WHITE);
+//boolean isFahrenheit: True == Fahrenheit; False == Celcius
+float computeHeatIndex(float temperature, float percentHumidity, bool isFahrenheit) {
+  // Using both Rothfusz and Steadman's equations
+  // http://www.wpc.ncep.noaa.gov/html/heatindex_equation.shtml
+  float hi;
+
+  if (!isFahrenheit)
+    temperature = convertCtoF(temperature);
+
+  hi = 0.5 * (temperature + 61.0 + ((temperature - 68.0) * 1.2) + (percentHumidity * 0.094));
+
+  if (hi > 79) {
+    hi = -42.379 +
+             2.04901523 * temperature +
+            10.14333127 * percentHumidity +
+            -0.22475541 * temperature*percentHumidity +
+            -0.00683783 * pow(temperature, 2) +
+            -0.05481717 * pow(percentHumidity, 2) +
+             0.00122874 * pow(temperature, 2) * percentHumidity +
+             0.00085282 * temperature*pow(percentHumidity, 2) +
+            -0.00000199 * pow(temperature, 2) * pow(percentHumidity, 2);
+
+    if((percentHumidity < 13) && (temperature >= 80.0) && (temperature <= 112.0))
+      hi -= ((13.0 - percentHumidity) * 0.25) * sqrt((17.0 - abs(temperature - 95.0)) * 0.05882);
+
+    else if((percentHumidity > 85.0) && (temperature >= 80.0) && (temperature <= 87.0))
+      hi += ((percentHumidity - 85.0) * 0.1) * ((87.0 - temperature) * 0.2);
   }
 
-  // text display tests
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  drawTemperature(temperature);
-  drawAirHumidity(airHumidity);
-
-  display.drawXBitmap(0, 20, ico_drop, ico_width, ico_height, WHITE);
-
-
-  display.display();
+  return isFahrenheit ? hi : convertFtoC(hi);
 }
-#endif
 
 void loop() {
 
@@ -373,30 +371,45 @@ void loop() {
   float light = sensor.getLight(true);
   sensor.sleep(); // available since FW 2.3
 
-  float temp = dht.readTemperature();
-  float humidity = dht.readHumidity();
+  float temp;
+  float humidity;
 
+  #ifdef USE_DHT22
+    temp = dht.readTemperature();
+    humidity = dht.readHumidity();
+  #endif
+  #ifdef USE_SHT30
+    sht30.get();
+    temp = sht30.cTemp;
+    humidity = sht30.humidity;
+  #endif
+
+#ifdef BATTERY_MONITOR
   // read the input on analog pin 0:
   int sensorValue = analogRead(A0);
   // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 3.2V):
   float voltage = sensorValue * (4.2 / 1023.0);
+#endif
 
   PLANT_PRINT("Soil Moisture Capacitance: ");
   PLANT_PRINT(soilMoisture); //read capacitance register
-  PLANT_PRINT(", Temperature: ");
+  PLANT_PRINT(", Soil-Temperature: ");
   PLANT_PRINT(tempChirp); //temperature register
   PLANT_PRINT(", Light: ");
   PLANT_PRINT(light); //request light measurement, wait and read light register*/
-  PLANT_PRINT(", DHT Temperature: ");
+  PLANT_PRINT(", Temperature: ");
   PLANT_PRINT(temp);
-  PLANT_PRINT(", DHT Humidity: ");
+  PLANT_PRINT(", Humidity: ");
   PLANT_PRINT(humidity);
-  PLANT_PRINT(", DHT HeatIndex: ");
-  PLANT_PRINT(dht.computeHeatIndex(temp, humidity, false));
+  PLANT_PRINT(", HeatIndex: ");
+  PLANT_PRINT(computeHeatIndex(temp, humidity, false));
+#ifdef BATTERY_MONITOR
   PLANT_PRINT(", Voltage: ");
   PLANT_PRINT(voltage);
   PLANT_PRINT(", SensorValue: ");
-  PLANT_PRINTLN(sensorValue);
+  PLANT_PRINT(sensorValue);
+#endif
+  PLANT_PRINTLN();
 
   if(wifiMulti.run() == WL_CONNECTED)
   {
@@ -405,36 +418,45 @@ void loop() {
   }
   else
   {
-    PLANT_PRINTLN("WiFi NOT connected");
+    PLANT_PRINTLN("WiFi NOT connected going to DeepSleep");
+    #ifdef USE_DEEPSLEEP
+      // convert to microseconds
+      ESP.deepSleep(SLEEPSECONDS * 1000000);
+    #else
+      delay(SLEEPSECONDS * 1000);
+    #endif
+    return;
   }
 
   if (!mqtt.connected())
   {
     reconnect();
   }
-  mqtt.loop();
 
   // publish Values to defined Topics
   String topic = "PlantWatch/";
   topic += String(ESP.getChipId(), HEX);
   topic += "/";
-  PLANT_PRINTLN("publish messages");
-
+  PLANT_PRINTLN("publish messages to " + topic);
   mqtt.publish(String(topic + "SoilMoisture").c_str(), String(soilMoisture, 2).c_str());
-  mqtt.publish(String(topic + "Temperature1").c_str(), String(tempChirp, 2).c_str());
-  mqtt.publish(String(topic + "Temperature2").c_str(), String(temp, 2).c_str());
+  mqtt.publish(String(topic + "Temperature_Soil").c_str(), String(tempChirp, 2).c_str());
+  mqtt.publish(String(topic + "Temperature_DHT").c_str(), String(temp, 2).c_str());
   mqtt.publish(String(topic + "Light").c_str(), String(light, 2).c_str());
   mqtt.publish(String(topic + "Humidity").c_str(), String(humidity, 2).c_str());
-  mqtt.publish(String(topic + "HeatIndex").c_str(), String(dht.computeHeatIndex(temp, humidity, false), 2).c_str());
+  mqtt.publish(String(topic + "HeatIndex").c_str(), String(computeHeatIndex(temp, humidity, false), 2).c_str());
+#ifdef BATTERY_MONITOR
   mqtt.publish(String(topic + "Voltage").c_str(), String(voltage, 2).c_str());
   mqtt.publish(String(topic + "VoltageAnalogValue").c_str(), String(sensorValue).c_str());
-
+#endif
   PLANT_PRINTLN("messages published");
 
   #ifdef OLED
-    updateDisplay(voltage, temp, humidity);
+    display.updateDisplay(voltage, temp, humidity);
   #endif
 
+  mqtt.loop();    
+  mqtt.disconnect();
+  delay(2000);
   #ifdef USE_DEEPSLEEP
     // convert to microseconds
     ESP.deepSleep(SLEEPSECONDS * 1000000);

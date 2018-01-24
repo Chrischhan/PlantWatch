@@ -93,3 +93,62 @@ void My_MicroOLED::drawCircleQuads(int16_t x0, int16_t y0, int16_t radius, uint8
     drawPixel(x0, y0 - radius);
   }
 }
+
+void My_MicroOLED::drawTemperature(const float& temperature)
+{
+  drawXBitmap(0, 0, ico_temp, ico_width, ico_height, WHITE);
+  String tempText = String(temperature, 1);
+  String text = tempText + " C";
+
+  char charBuf[10];
+  tempText.toCharArray(charBuf, 10);
+
+  int16_t newx, newy;
+  uint16_t wid, hig;
+
+  setCursor(6,0);
+  getTextBounds(charBuf, getCursorX(), getCursorY(), &newx, &newy, &wid, &hig);
+  drawChar(newx + wid + 1, newy, (unsigned char)247, WHITE, BLACK, 1);
+  print(text);
+}
+
+void My_MicroOLED::drawAirHumidity(const float& airHumidity)
+{
+  drawXBitmap(0, 10, ico2_cloud, ico2_width, ico2_height, WHITE);
+  String tempText = String(airHumidity, 1);
+  String text = tempText + "%";
+  setCursor(ico2_width + 1, 10);
+  print(text);
+}
+
+void My_MicroOLED::updateDisplay(const float& voltage, const float& temperature, const float& airHumidity)
+{
+  clearDisplay();
+  if (voltage >= 3.9)
+  {
+    drawXBitmap(52, 0, logo_bat_3_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else if (voltage >= 3.6)
+  {
+    drawXBitmap(52, 0, logo_bat_2_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else if (voltage >= 3.3)
+  {
+    drawXBitmap(52, 0, logo_bat_1_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+  else
+  {
+    drawXBitmap(52, 0, logo_bat_0_3, logo_bat_width, logo_bat_height, WHITE);
+  }
+
+  // text display tests
+  setTextSize(1);
+  setTextColor(WHITE);
+  drawTemperature(temperature);
+  drawAirHumidity(airHumidity);
+
+  drawXBitmap(0, 20, ico_drop, ico_width, ico_height, WHITE);
+
+
+  display();
+}

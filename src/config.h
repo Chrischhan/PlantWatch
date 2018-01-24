@@ -9,23 +9,33 @@
 //#define OLED
 //#define LEDS
 //#define SELFUPDATE
+#define BATTERY_MONITOR
+//#define USE_DHT22
+#define USE_SHT30
 
 // Setup debug printing macros.
 // comment to disable Serial Logging
 #define PLANT_DEBUG
 
 // comment to send ESP to delay instead of DeepSleep
-//#define USE_DEEPSLEEP
+#define USE_DEEPSLEEP
 
-// Uncomment to enable printing out nice debug messages. (DHT LIB)
-//#define DHT_DEBUG
+#ifdef USE_DHT22
+  // Uncomment to enable printing out nice debug messages. (DHT LIB)
+  //#define DHT_DEBUG
+  #define DHTPIN D4     // what pin DHT connected to
+#endif
 
-#define DHTPIN D4     // what pin DHT connected to
+#ifdef USE_SHT30
+  // Uncomment to enable printing out nice debug messages. (DHT LIB)
+  //#define DHT_DEBUG
+  #define SHT_ADDRESS 0x45     // what pin DHT connected to
+#endif
 
 #define SCL_PIN D1
 #define SDA_PIN D2
 
-#define SLEEPSECONDS 10
+#define SLEEPSECONDS 900
 
 #ifdef LEDS
   #define BLUE_LED D6

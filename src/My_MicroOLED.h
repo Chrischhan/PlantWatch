@@ -33,7 +33,9 @@ public:
   // Draw all Quadrants specified in the quads bit mask
   void drawCircleQuads(int16_t x0, int16_t y0, int16_t radius, uint8_t quads);
 
-
+  void drawTemperature(const float& temperature);
+  void drawAirHumidity(const float& airHumidity);
+  void updateDisplay(const float& voltage, const float& temperature, const float& airHumidity);
 };
 
 #endif // MY_MICROOLED_H
