@@ -153,7 +153,7 @@ bool initializeWifiNetwork()
 
 bool initializeHardware()
 {
-    pinMode(BUILTIN_LED, OUTPUT); // initialize onboard LED as output
+    pinMode(LED_BUILTIN, OUTPUT); // initialize onboard LED as output
 #ifdef LEDS
     pinMode(BLUE_LED, OUTPUT); // set onboard LED as output
     pinMode(GREEN_LED, OUTPUT); // set onboard LED as output
@@ -162,7 +162,7 @@ bool initializeHardware()
     // Connect D0 to RST to wake up
     pinMode(D0, WAKEUP_PULLUP);
 
-    digitalWrite(BUILTIN_LED, HIGH); // turn on LED with voltage LOW
+    digitalWrite(LED_BUILTIN, HIGH); // turn on LED with voltage LOW
 #ifdef LEDS
     digitalWrite(BLUE_LED, LOW);
     digitalWrite(GREEN_LED, LOW);
@@ -277,7 +277,7 @@ void setup()
         display.drawProgressBar(0, 35, 62, 10, i);
         display.display();
 #endif
-        digitalWrite(BUILTIN_LED, i % 2 == 1 ? HIGH : LOW);
+        digitalWrite(LED_BUILTIN, i % 2 == 1 ? HIGH : LOW);
 #ifdef LEDS
         if (i == 33)
         {
